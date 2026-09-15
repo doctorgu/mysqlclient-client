@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Flask API Test</title>
+    <style>
+      .container {
+        display: flex;
+        flex-direction: column;
+      }
+    </style>
+    <script>
+      async function getResponse(api) {
+        const url = `http://127.0.0.1:5000${api}`;
+        const response = await fetch(url, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return response;
+      }
+
+      async function callApi() {
+        const apis = [
+          "/create-tables",
+          "/upsert-user",
+          "/upsert-user-params-out",
+          "/upsert-user-list",
+          "/upsert-delete-user-with",
+          "/read-user-one-row",
+          "/read-user-all-rows",
+          "/read-using-conditional1",
+          "/read-using-conditional2",
+          "/read-using-en-ko1",
+          "/read-using-en-ko2",
+          "/use-db-client",
+        ];
+
+        const rets = [];
+        for (const api of apis) {
+          const response = await getResponse(api);
+          const ret = await response.json();
+          rets.push(JSON.stringify(ret));
+        }
+        document.getElementById("result").value = rets.join("\n");
+      }
+
+      async function downloadCsvFile() {
+        const response = await getResponse("/read-csv-partial");
+
+        const reader = response.body.getReader();
+
+        let fileName = "download.csv";
+        const disposition = response.headers.get("Content-Disposition");
+        if (disposition && disposition.includes("attachment")) {
+          const m = disposition.match(/filename="(.+)"/i);
+          if (m) {
+            fileName = m[1];
+          }
+        }
+
+        let chunks = [];
+        let bytes = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          bytes += value.length;
+          document.getElementById("result").value = `${bytes} bytes received`;
+        }
+
+        // All chunks received → create final file
+        const blob = new Blob(chunks, { type: "text/csv" });
+        const downloadUrl = URL.createObjectURL(blob);
+
+        // Trigger download
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+
+        // Cleanup
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+      }
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <a href="javascript:callApi()">API call</a>
+      <a href="javascript:downloadCsvFile()">Download CSV file</a>
+      <textarea id="result" placeholder="result" rows="15"></textarea>
+    </div>
+  </body>
+</html>

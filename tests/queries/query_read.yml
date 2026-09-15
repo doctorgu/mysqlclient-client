@@ -1,0 +1,46 @@
+- name: read_user_id_all
+  value: |
+    SELECT  user_id
+    FROM    t_user
+
+- name: read_user_search
+  value: |
+    SELECT  user_id, user_name, user_rank, insert_time, update_time
+    FROM    t_user
+    WHERE   1 = 1
+    #if user_id
+            AND user_id = %(user_id)s
+    #elif user_name
+            AND user_name LIKE %(user_name)s
+    #elif user_rank
+            AND user_rank <= %(user_rank)s
+    #endif
+
+- name: read_user_alias
+  value: |
+    SELECT  user_id "Id|아이디", user_name "Name|이름", user_rank "Rank|순위"
+    FROM    t_user
+    WHERE   user_id = %(user_id)s
+
+- name: read_csv_partial
+  value: |
+    WITH RECURSIVE dates AS (
+        SELECT 1 AS rnum, CAST('2001-01-01' AS DATE) AS d
+        UNION ALL
+        SELECT rnum + 1, d + INTERVAL 1 DAY
+        FROM   dates
+        WHERE  d < '2025-12-31'
+    )
+    SELECT rnum,
+           DATE_FORMAT(d, '%Y년 %m월 %d일') AS each_day
+    FROM   dates
+
+- name: insert_python_join
+  value: |
+    INSERT INTO python_join (
+            repository, file_path, fn_name, line_no, join_type,
+            left_table, left_column, right_table, right_column
+    )
+    SELECT
+            %(repository)s, %(file_path)s, %(fn_name)s, %(line_no)s, %(join_type)s,
+            %(left_table)s, %(left_column)s, %(right_table)s, %(right_column)s

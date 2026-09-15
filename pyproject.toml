@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mysqlclient-client"
+version = "1.0.0"
+description = "MySQL helper function to run MySQL query with #if support"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Gu Park", email = "doctorgu@kakao.com"}
+]
+keywords = ["mysqlclient client", "mysqlclient helper", "mysql helper"]
+dependencies = [
+    "mysqlclient",
+    "pyhumps",
+    "typing-extensions",
+    "python-dotenv",
+    "pydantic-settings",
+    "Flask",
+    "PyYAML",
+    "ruff",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-env",
+    "pytest-mock",
+    "pytest-asyncio",
+    "build",
+]
+
+[project.urls]
+homepage = "https://github.com/doctorgu/mysqlclient-client"
+repository = "https://github.com/doctorgu/mysqlclient-client"
+documentation = "https://github.com/doctorgu/mysqlclient-client"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mysqlclient_client*"] # to include query_by_key sub dir
+namespaces = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", # default style,
+    "F", # error (bug)
+    "I", # import
+    "B", # bugbear
+    "UP", # recent python grammar
+    # "T20", # No print, Only Logger
+]
+
+[tool.ruff.format]
+line-ending = "cr-lf"

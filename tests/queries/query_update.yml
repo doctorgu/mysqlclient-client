@@ -1,0 +1,31 @@
+- name: create_tables
+  value: |
+    CREATE TABLE IF NOT EXISTS t_user (
+        user_id VARCHAR(50) NOT NULL,
+        user_name VARCHAR(100) NOT NULL,
+        user_rank INT NOT NULL,
+        insert_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT t_user_pkey PRIMARY KEY (user_id)
+    )
+
+- name: upsert_user
+  value: |
+    INSERT INTO t_user
+        (
+            user_id, user_name, user_rank
+        )
+    VALUES
+        (
+            %(user_id)s, %(user_name)s, %(user_rank)s
+        )
+    ON DUPLICATE KEY UPDATE
+        user_name = %(user_name)s,
+        user_rank = %(user_rank)s,
+        update_time = CURRENT_TIMESTAMP
+
+- name: delete_user
+  value: |
+    DELETE
+    FROM    t_user
+    WHERE   user_id = %(user_id)s
