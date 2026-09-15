@@ -52,6 +52,7 @@ class ClientPool:
             charset="utf8mb4",
             autocommit=False,
             cursorclass=MySQLdb.cursors.DictCursor,
+            ssl_mode="REQUIRED",
         )
         return conn
 
