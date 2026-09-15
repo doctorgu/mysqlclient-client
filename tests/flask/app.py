@@ -257,8 +257,69 @@ def read_using_conditional3():
     )
     # ['홍길동', '김순자', '김말자']
     return get_json(
-        fn_name=read_using_conditional2.__name__,
+        fn_name=read_using_conditional3.__name__,
         message=[row["user_name"] for row in rows],
+    )
+
+
+@app.route("/read-using-include1")
+def read_using_include1():
+    """read using include 1 (#include)"""
+
+    db_client = Client(db_settings=db_settings)
+
+    # SELECT  user_id
+    # FROM    t_user
+    # WHERE   1 = 1
+    #         AND user_id = %(user_id)s
+    rows = db_client.read_rows(
+        "read_user_by_key",
+        {"user_id": "gildong.hong", "user_name": "", "user_rank": 0},
+    )
+    # ['gildong.hong']
+    return get_json(
+        fn_name=read_using_include1.__name__,
+        message=[row["user_id"] for row in rows],
+    )
+
+
+@app.route("/read-using-include2")
+def read_using_include2():
+    """read using include 2 (#include)"""
+
+    db_client = Client(db_settings=db_settings)
+
+    # SELECT  user_id
+    # FROM    t_user
+    # WHERE   1 = 1
+    #         AND user_name LIKE %(user_name)s
+    rows = db_client.read_rows(
+        "read_user_by_key", {"user_id": "", "user_name": "%김%", "user_rank": 0}
+    )
+    # ['sunja.kim', 'malja.kim']
+    return get_json(
+        fn_name=read_using_include2.__name__,
+        message=[row["user_id"] for row in rows],
+    )
+
+
+@app.route("/read-using-include3")
+def read_using_include3():
+    """read using include 3 (#include)"""
+
+    db_client = Client(db_settings=db_settings)
+
+    # SELECT  user_id
+    # FROM    t_user
+    # WHERE   1 = 1
+    #         AND user_rank <= %(user_rank)s
+    rows = db_client.read_rows(
+        "read_user_by_key", {"user_id": "", "user_name": "", "user_rank": 3}
+    )
+    # ['gildong.hong', 'sunja.kim', 'malja.kim']
+    return get_json(
+        fn_name=read_using_include3.__name__,
+        message=[row["user_id"] for row in rows],
     )
 
 

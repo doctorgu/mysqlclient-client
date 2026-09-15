@@ -50,6 +50,34 @@ rows_list.append(
         ],
     )
 )
+rows_list.append(
+    ReadRowsMock(
+        qry_key="read_user_by_key",
+        params={"user_id": "gildong.hong", "user_name": "", "user_rank": 0},
+        params_ignore=params_ignore_common,
+        rows=[{"user_id": "gildong.hong"}],
+    )
+)
+rows_list.append(
+    ReadRowsMock(
+        qry_key="read_user_by_key",
+        params={"user_id": "", "user_name": "%김%", "user_rank": 0},
+        params_ignore=params_ignore_common,
+        rows=[{"user_id": "sunja.kim"}, {"user_id": "malja.kim"}],
+    )
+)
+rows_list.append(
+    ReadRowsMock(
+        qry_key="read_user_by_key",
+        params={"user_id": "", "user_name": "", "user_rank": 3},
+        params_ignore=params_ignore_common,
+        rows=[
+            {"user_id": "gildong.hong"},
+            {"user_id": "sunja.kim"},
+            {"user_id": "malja.kim"},
+        ],
+    )
+)
 
 rows_list.append(
     ReadRowsMock(

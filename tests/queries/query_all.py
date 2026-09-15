@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 dir_current = Path(__file__).parent
-all_query: dict[str, str] = {}
+all_query: dict[str, str | dict[str, str]] = {}
 
 for yml_path in sorted(
     p for p in dir_current.iterdir() if p.suffix in (".yml", ".yaml")
@@ -13,16 +13,21 @@ for yml_path in sorted(
     with open(yml_path, encoding="utf-8") as f:
         items = yaml.safe_load(f) or []
 
-    qry_cur: dict[str, str] = {}
+    qry_cur: dict[str, str | dict[str, str]] = {}
     if isinstance(items, list):
         for item in items:
             if isinstance(item, dict) and "name" in item and "value" in item:
-                val = item["value"].strip()
-                qry_cur[item["name"]] = f"\n{val}\n"
+                val = item["value"]
+                if isinstance(val, str):
+                    qry_cur[item["name"]] = f"\n{val.strip()}\n"
+                elif isinstance(val, dict):
+                    qry_cur[item["name"]] = val
     elif isinstance(items, dict):
         for k, v in items.items():
-            val = str(v).strip()
-            qry_cur[k] = f"\n{val}\n"
+            if isinstance(v, str):
+                qry_cur[k] = f"\n{v.strip()}\n"
+            elif isinstance(v, dict):
+                qry_cur[k] = v
 
     dup = all_query.keys() & qry_cur.keys()
     if dup:

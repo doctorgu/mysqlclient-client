@@ -78,6 +78,76 @@ def get_conditional(qry_str: str, params: dict) -> str:
     return "\n".join(rets)
 
 
+def get_include(qry_str: str, all_query: dict, max_depth: int = 10) -> str:
+    """
+    replace #include name or #include name(key) with query string or snippet.
+
+    ex:
+    #include name
+    #include name(key)
+    """
+
+    pattern = re.compile(
+        r"^#include\s+([a-zA-Z0-9_]+)(?:\(\s*([a-zA-Z0-9_]+)\s*\))?$"
+    )
+    current_qry = qry_str
+
+    for _ in range(max_depth):
+        lines = current_qry.splitlines()
+        has_include = False
+        rets = []
+
+        for line in lines:
+            line_strip = line.strip()
+            if "#include" in line:
+                if not line_strip.startswith("#include"):
+                    raise ValueError(f"inline #include is not allowed: '{line}'")
+
+                has_include = True
+                m = pattern.match(line_strip)
+                if not m:
+                    raise ValueError(f"invalid #include syntax: '{line_strip}'")
+
+                name, key = m.group(1), m.group(2)
+                if name not in all_query:
+                    raise KeyError(f"'{name}' not in all_query")
+
+                target = all_query[name]
+                if key is not None:
+                    if not isinstance(target, dict):
+                        raise ValueError(
+                            f"'{name}' does not have sub keys, "
+                            f"but parameter '{key}' was passed"
+                        )
+                    if key not in target:
+                        raise KeyError(f"sub key '{key}' not in '{name}'")
+                    val = target[key]
+                else:
+                    if isinstance(target, dict):
+                        raise ValueError(
+                            f"'{name}' has sub keys, "
+                            "but no sub key parameter was passed"
+                        )
+                    val = target
+
+                for sub_line in str(val).strip("\r\n").splitlines():
+                    rets.append(sub_line)
+            else:
+                rets.append(line)
+
+        current_qry = "\n".join(rets)
+        if not has_include:
+            break
+    else:
+        if any(
+            line.strip().startswith("#include")
+            for line in current_qry.splitlines()
+        ):
+            raise ValueError("Circular or too deep #include detected")
+
+    return current_qry
+
+
 def rep_kv(query: str, tab_count: int, **kwargs) -> str:
     """
     replace {key} with value when `rev_ky("WHERE user_name = {key}", key="u.user_name")`

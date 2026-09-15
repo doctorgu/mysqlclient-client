@@ -28,25 +28,25 @@ class Settings:
         FROM tbl_vietnam
     #endif
     """
-    all_query: dict[str, str]
+    all_query: dict[str, str | dict[str, str]]
     """all query information"""
 
-    before_read_execute: Callable[[str, dict, str, str], None]
+    before_read_execute: Callable[[str, dict, str, str], None] = None
     """
     qry_key: str, params: dict, qry_str: str, qry_with_value: str
     """
-    after_read_execute: Callable[[str, int], None]
+    after_read_execute: Callable[[str, int], None] = None
     """
     qry_key: str, duration: int
     """
     before_update_execute: Callable[
         [str, dict, dict, str, str],
         None,
-    ]
+    ] = None
     """
     qry_key: str, params: dict, params_out: dict, qry_str: str, qry_with_value: str
     """
-    after_update_execute: Callable[[str, int, dict, int], None]
+    after_update_execute: Callable[[str, int, dict, int], None] = None
     """
     qry_key: str, row_count: int, params_out: dict, duration: int
     """

@@ -4,7 +4,11 @@ import json
 from datetime import date, datetime
 from typing import Literal
 
-from .query_util import get_conditional, replace_en_ko_column_alias
+from .query_util import (
+    get_conditional,
+    get_include,
+    replace_en_ko_column_alias,
+)
 from .settings import Settings
 
 
@@ -31,7 +35,7 @@ class Query:
             return str(obj)
 
         query = self.qry_settings.all_query.get(qry_key)
-        if not query:
+        if not query or not isinstance(query, str):
             raise KeyError(f"{qry_key} not exists")
 
         cond_params = (
@@ -54,6 +58,8 @@ class Query:
             "en": en,
         }
 
+        if "#include" in query:
+            query = get_include(query, self.qry_settings.all_query)
         if self.qry_settings.use_en_ko_column_alias and isinstance(en, bool):
             query = replace_en_ko_column_alias(query, en)
         if self.qry_settings.use_conditional and "#if" in query:

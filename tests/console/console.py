@@ -1,7 +1,5 @@
 """db_client_test"""
 
-import json
-
 from mysqlclient_client.client import Client
 from tests.db_client import DbClient
 from tests.db_settings import db_settings
@@ -181,6 +179,43 @@ def read_using_conditional():
     print(read_using_conditional.__name__, [row["user_name"] for row in rows])
 
 
+def read_using_include():
+    """read using include (#include)"""
+
+    db_client = Client(db_settings=db_settings)
+
+    # SELECT  user_id
+    # FROM    t_user
+    # WHERE   1 = 1
+    #         AND user_id = %(user_id)s
+    rows = db_client.read_rows(
+        "read_user_by_key",
+        {"user_id": "gildong.hong", "user_name": "", "user_rank": 0},
+    )
+    # ['gildong.hong']
+    print(read_using_include.__name__, [row["user_id"] for row in rows])
+
+    # SELECT  user_id
+    # FROM    t_user
+    # WHERE   1 = 1
+    #         AND user_name LIKE %(user_name)s
+    rows = db_client.read_rows(
+        "read_user_by_key", {"user_id": "", "user_name": "%김%", "user_rank": 0}
+    )
+    # ['sunja.kim', 'malja.kim']
+    print(read_using_include.__name__, [row["user_id"] for row in rows])
+
+    # SELECT  user_id
+    # FROM    t_user
+    # WHERE   1 = 1
+    #         AND user_rank <= %(user_rank)s
+    rows = db_client.read_rows(
+        "read_user_by_key", {"user_id": "", "user_name": "", "user_rank": 3}
+    )
+    # ['gildong.hong', 'sunja.kim', 'malja.kim']
+    print(read_using_include.__name__, [row["user_id"] for row in rows])
+
+
 def use_db_client():
     """use inherited class to not use db_settings every time"""
 
@@ -221,18 +256,6 @@ def use_with():
         print(use_with.__name__, "len:", len(rows))
 
 
-def insert_python_join():
-    """insert python join"""
-
-    with open("tests/console/python_join.json", encoding="utf-8") as f:
-        params_list = json.load(f)
-
-    db_client = DbClient()
-    qry_list = [("insert_python_join", params) for params in params_list]
-    row_counts = db_client.updates(qry_list)
-    print(insert_python_join.__name__, len(row_counts))
-
-
 if __name__ == "__main__":
     create_tables()
 
@@ -245,6 +268,7 @@ if __name__ == "__main__":
     read_user_all_rows()
     read_using_en_ko()
     read_using_conditional()
+    read_using_include()
 
     use_db_client()
     use_with()

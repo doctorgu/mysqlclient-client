@@ -19,5 +19,5 @@ class Settings:
     #endif
     """
 
-    all_query: dict[str, str]
+    all_query: dict[str, str | dict[str, str]]
     """all query information"""
