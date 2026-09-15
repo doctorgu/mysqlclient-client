@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.0]
+
+- Support name referencing via `#include name` and `#include name(key)`
+
 ## [1.1.1]
 
 - Refactoring code to apply ruff format, ruff check
