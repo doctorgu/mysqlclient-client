@@ -10,23 +10,11 @@ def get_conditional(qry_str: str, params: dict) -> str:
     `#if target == 'korea' ... #elif target == 'vietnam' ... #else ... #endif`
     """
 
-    def eval_safe(to_eval: str, params: dict) -> bool:
+    def eval_safe(condition: str, params: dict) -> bool:
         """
-        # assert eval_safe('%(target)s != ""', {"target": ""}) is False
-        # assert eval_safe('"A" in %(targets)s', {"targets": ["A", "B"]}) is True
-        # assert eval_safe('"A" not in %(targets)s', {"targets": ["A", "B"]}) is False
-        # assert eval_safe("%(t)s in [i for i in range(10)]", {"t": 1}) is True
+        allow only ${param} and operators for condition to call eval safely
         """
 
-        # remove '%(' and ')s' from %(target)s
-        to_eval = re.sub(r"%\((.*?)\)s", r"\1", to_eval)
-
-        # allow below:
-        # - string inside quotes
-        # - digit
-        to_check = re.sub(r"""(".*?"|'.*?'|\b\d+\b)""", "", to_eval)
-
-        param_set = {key for key in params}
         op_set = {
             "==",
             "!=",
@@ -34,10 +22,21 @@ def get_conditional(qry_str: str, params: dict) -> str:
             "<=",
             ">",
             "<",
+            "+",
+            "-",
+            "*",
+            "/",
+            "//",
+            "%",
+            "**",
             "in",
             "not",
             "and",
             "or",
+            "is",
+            "True",
+            "False",
+            "None",
             "[",
             "]",
             "(",
@@ -45,13 +44,49 @@ def get_conditional(qry_str: str, params: dict) -> str:
             ",",
         }
 
-        eval_set = set(to_check.split())
-        diff = eval_set - (param_set | op_set)
-        if diff:
-            raise ValueError(f"'{diff}' not in {param_set | op_set}")
+        # Check for raw variables outside of quotes, numbers, and ${param}
+        to_check = re.sub(r"""(".*?"|'.*?'|\b\d+(?:\.\d+)?\b)""", "", condition)
+        to_check = re.sub(r"\$\{\s*([a-zA-Z0-9_.]+)\s*\}", "", to_check)
+        to_check = re.sub(r"([()[\],])", r" \1 ", to_check)
 
-        is_include = bool(eval(to_eval, {}, params.copy()))
-        return is_include
+        eval_set = set(to_check.split())
+        diff = eval_set - op_set
+        if diff:
+            raise ValueError(
+                f"Raw variable or invalid syntax '{diff}' not allowed in condition. "
+                "Only '${param}' syntax is supported."
+            )
+
+        pattern_param = r"\$\{\s*([a-zA-Z0-9_.]+)\s*\}"
+        used_params = re.findall(pattern_param, condition)
+
+        def get_val(key: str):
+            if key in params:
+                return params[key]
+            if "." in key:
+                parts = key.split(".")
+                curr = params
+                for p in parts:
+                    if isinstance(curr, dict) and p in curr:
+                        curr = curr[p]
+                    else:
+                        raise KeyError(f"'{key}' not in params")
+                return curr
+            raise KeyError(f"'{key}' not in params")
+
+        eval_dict = {}
+        param_map = {}
+        for idx, p in enumerate(used_params):
+            if p not in param_map:
+                var_name = f"__p_{idx}"
+                param_map[p] = var_name
+                eval_dict[var_name] = get_val(p)
+
+        def replace_var(m: re.Match) -> str:
+            return param_map[m.group(1).strip()]
+
+        to_eval = re.sub(pattern_param, replace_var, condition)
+        return bool(eval(to_eval, {"__builtins__": {}}, eval_dict))
 
     lines = qry_str.split("\n")
     rets = []
@@ -146,6 +181,44 @@ def get_include(qry_str: str, all_query: dict, max_depth: int = 10) -> str:
             raise ValueError("Circular or too deep #include detected")
 
     return current_qry
+
+
+def get_template(qry_str: str, params: dict) -> str:
+    """
+    replace ${param} with value from params.
+    supports mybatis-style template substitution.
+
+    ex:
+    SELECT id FROM ${table_name}
+    ->
+    SELECT id FROM t_user
+    """
+
+    def replacer(match: re.Match) -> str:
+        key = match.group(1).strip()
+        if key in params:
+            val = params[key]
+            if val is None:
+                raise ValueError(f"'{key}' value in params cannot be None")
+            return str(val)
+
+        if "." in key:
+            parts = key.split(".")
+            curr = params
+            for p in parts:
+                if isinstance(curr, dict) and p in curr:
+                    curr = curr[p]
+                else:
+                    break
+            else:
+                if curr is None:
+                    raise ValueError(f"'{key}' value in params cannot be None")
+                return str(curr)
+
+        raise KeyError(f"'{key}' not in params")
+
+    replaced = re.sub(r"(?<!\\)\$\{\s*([a-zA-Z0-9_.]+)\s*\}", replacer, qry_str)
+    return replaced.replace(r"\${", "${")
 
 
 def rep_kv(query: str, tab_count: int, **kwargs) -> str:

@@ -211,11 +211,11 @@ Enabled when `use_conditional=True`:
     SELECT  user_id, user_name, user_rank, insert_time, update_time
     FROM    t_user
     WHERE   1 = 1
-    #if user_id
+    #if ${user_id}
             AND user_id = %(user_id)s
-    #elif user_name
+    #elif ${user_name}
             AND user_name LIKE %(user_name)s
-    #elif user_rank
+    #elif ${user_rank}
             AND user_rank <= %(user_rank)s
     #endif
 ```
@@ -239,20 +239,38 @@ Include reusable query fragments or sub-queries. Line-based only (no inline `#in
     SELECT  user_id
     FROM    t_user
     WHERE   1 = 1
-    #if user_id
+    #if ${user_id}
     #include _filter_by_key(user_id)
-    #elif user_name
+    #elif ${user_name}
     #include _filter_by_key(user_name)
-    #elif user_rank
+    #elif ${user_rank}
     #include _filter_by_key(user_rank)
     #endif
 ```
 
 If a parameter is passed and no matching sub-key exists, an error is raised.
 
+## Template Variable (`${param}`)
+
+Support MyBatis-style template variable substitution (e.g. dynamic table names, column names). Substituted directly into the SQL text before execution:
+
+```yaml
+- name: delete_data_by_version
+  value: |
+    DELETE
+    FROM    ${table}
+    WHERE   version = %(version)s
+```
+
+```python
+db.update("delete_data_by_version", {"table": "data_menu", "version": "1.0.0"})
+```
+
+If a referenced `${param}` does not exist in `params`, a `KeyError` is raised. If its value is `None`, a `ValueError` is raised.
+
 ## Safety & Security
 
-The `#if` preprocessor only allows parameter names, string literals, numbers, and basic boolean operators. Any attempt to inject raw SQL will raise a parsing error before execution.
+The `#if` preprocessor only allows `${param}` variables, string literals, numbers, and basic boolean operators. Raw variable names without `${...}` or any attempt to inject raw SQL will raise a parsing error before execution.
 
 ## Features Summary
 
@@ -268,6 +286,7 @@ The `#if` preprocessor only allows parameter names, string literals, numbers, an
 | Bilingual column aliases      | `"Name\|이름"` syntax                                                           |
 | Conditional SQL               | `#if` / `#elif` / `#endif`                                                      |
 | Include Query Snippet         | `#include` / `#include(key)`                                                    |
+| Template Variable             | `${param}` MyBatis-style text substitution (e.g. dynamic table names)           |
 | Logging support               | Before and after execute hooks via `before...` and `after...` callables         |
 | SQL injection protection      | Strict parsing in conditionals                                                  |
 

@@ -8,11 +8,11 @@
     SELECT  user_id, user_name, user_rank, insert_time, update_time
     FROM    t_user
     WHERE   1 = 1
-    #if user_id
+    #if ${user_id}
             AND user_id = %(user_id)s
-    #elif user_name
+    #elif ${user_name}
             AND user_name LIKE %(user_name)s
-    #elif user_rank
+    #elif ${user_rank}
             AND user_rank <= %(user_rank)s
     #endif
 
@@ -27,11 +27,11 @@
     SELECT  user_id
     FROM    t_user
     WHERE   1 = 1
-    #if user_id
+    #if ${user_id}
     #include _filter_by_key(user_id)
-    #elif user_name
+    #elif ${user_name}
     #include _filter_by_key(user_name)
-    #elif user_rank
+    #elif ${user_rank}
     #include _filter_by_key(user_rank)
     #endif
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.2]
+
+- Support ${param} template variable and enforce ${param} in #if conditions
+
 ## [1.2.1]
 
 - Collect queries in Client class and delete query_all.py

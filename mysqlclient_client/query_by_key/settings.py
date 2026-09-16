@@ -12,7 +12,7 @@ class Settings:
 
     use_conditional: bool
     """
-    #if target == 'korea'
+    #if ${target} == 'korea'
         FROM tbl_korea
     #else
         FROM tbl_vietnam
