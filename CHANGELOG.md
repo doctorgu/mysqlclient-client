@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.1]
+
+- Collect queries in Client class and delete query_all.py
+
 ## [1.2.0]
 
 - Support name referencing via `#include name` and `#include name(key)`

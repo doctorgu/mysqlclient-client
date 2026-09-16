@@ -8,9 +8,11 @@ import threading
 import time
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import MySQLdb
 import MySQLdb.cursors
+import yaml
 
 from .query_by_key.query import Query
 from .query_by_key.query_util import (
@@ -148,11 +150,12 @@ class Client:
         self.conn: connection
         self.in_with_block = False
         self.db_settings = db_settings
+        self.all_query = self.get_all_query()
         self.qry = Query(
             qry_settings=QrySettings(
                 use_en_ko_column_alias=db_settings.use_en_ko_column_alias,
                 use_conditional=db_settings.use_conditional,
-                all_query=db_settings.all_query,
+                all_query=self.all_query,
             )
         )
         self.query_recent = ""
@@ -162,6 +165,72 @@ class Client:
             client_pool = ClientPool(db_settings)
             db_set_and_pool[db_set_key] = client_pool
             Client._conn_pool = client_pool
+
+    def get_all_query(
+        self, dir_queries: Path | str | None = None
+    ) -> dict[str, str | dict[str, str]]:
+        """Collect all queries from yaml files in queries directory."""
+        path: Path | None = None
+        explicit_path = False
+        if dir_queries:
+            path = Path(dir_queries)
+            explicit_path = True
+        elif getattr(self.db_settings, "dir_queries", None):
+            path = Path(self.db_settings.dir_queries)
+            explicit_path = True
+        else:
+            for candidate in [
+                Path.cwd() / "queries",
+                Path.cwd() / "tests" / "queries",
+            ]:
+                if candidate.is_dir():
+                    path = candidate
+                    break
+
+        if explicit_path and path and not path.is_dir():
+            raise FileNotFoundError(f"Directory not found: {path}")
+
+        all_query: dict[str, str | dict[str, str]] = {}
+        if path and path.is_dir():
+            for yml_path in sorted(
+                p for p in path.iterdir() if p.suffix in (".yml", ".yaml")
+            ):
+                with open(yml_path, encoding="utf-8") as f:
+                    items = yaml.safe_load(f) or []
+
+                qry_cur: dict[str, str | dict[str, str]] = {}
+                if isinstance(items, list):
+                    for item in items:
+                        if (
+                            isinstance(item, dict)
+                            and "name" in item
+                            and "value" in item
+                        ):
+                            val = item["value"]
+                            if isinstance(val, str):
+                                qry_cur[item["name"]] = f"\n{val.strip()}\n"
+                            elif isinstance(val, dict):
+                                qry_cur[item["name"]] = val
+                elif isinstance(items, dict):
+                    for k, v in items.items():
+                        if isinstance(v, str):
+                            qry_cur[k] = f"\n{v.strip()}\n"
+                        elif isinstance(v, dict):
+                            qry_cur[k] = v
+
+                dup = all_query.keys() & qry_cur.keys()
+                if dup:
+                    raise ValueError(
+                        f"duplicated keys: {dup} in {all_query.keys()}"
+                        f" and {qry_cur.keys()}"
+                    )
+
+                all_query |= qry_cur
+
+        if getattr(self.db_settings, "all_query", None):
+            all_query |= self.db_settings.all_query
+
+        return all_query
 
     def __enter__(self):
         # Called when entering the 'with' block
