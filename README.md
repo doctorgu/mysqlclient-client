@@ -305,6 +305,7 @@ rows = db.read_rows("read_users_in", {"user_ids": ["gildong.hong", "sunja.kim"]}
 ```
 
 Generated query sent to MySQL:
+
 ```sql
 SELECT  user_id, user_name
 FROM    t_user

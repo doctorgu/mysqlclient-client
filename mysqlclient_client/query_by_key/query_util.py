@@ -107,6 +107,11 @@ def get_conditional(qry_str: str, params: dict) -> str:
     foreach_depth = 0
     for line in lines:
         line_strip = line.strip()
+        if line_strip.startswith("#"):
+            if line_strip.endswith("\\"):
+                raise ValueError(
+                    f"Multi-line directive is not allowed: '{line_strip}'"
+                )
         if line_strip.startswith("#foreach"):
             foreach_depth += 1
             if is_include:
@@ -152,9 +157,7 @@ def get_include(qry_str: str, all_query: dict, max_depth: int = 10) -> str:
     #include name(key)
     """
 
-    pattern = re.compile(
-        r"^#include\s+([a-zA-Z0-9_]+)(?:\(\s*([a-zA-Z0-9_]+)\s*\))?$"
-    )
+    pattern = re.compile(r"^#include\s+([a-zA-Z0-9_]+)(?:\(\s*([a-zA-Z0-9_]+)\s*\))?$")
     current_qry = qry_str
 
     for _ in range(max_depth):
@@ -167,6 +170,10 @@ def get_include(qry_str: str, all_query: dict, max_depth: int = 10) -> str:
             if "#include" in line:
                 if not line_strip.startswith("#include"):
                     raise ValueError(f"inline #include is not allowed: '{line}'")
+                if line_strip.endswith("\\"):
+                    raise ValueError(
+                        f"Multi-line directive is not allowed: '{line_strip}'"
+                    )
 
                 has_include = True
                 m = pattern.match(line_strip)
@@ -205,8 +212,7 @@ def get_include(qry_str: str, all_query: dict, max_depth: int = 10) -> str:
             break
     else:
         if any(
-            line.strip().startswith("#include")
-            for line in current_qry.splitlines()
+            line.strip().startswith("#include") for line in current_qry.splitlines()
         ):
             raise ValueError("Circular or too deep #include detected")
 
@@ -251,7 +257,12 @@ def get_template(qry_str: str, params: dict) -> str:
     return replaced.replace(r"\${", "${")
 
 
-def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
+def get_foreach(
+    qry_str: str,
+    params: dict,
+    dialect: str = "mysql",
+    _loop_counter: list[int] | None = None,
+) -> str:
     """
     replace #foreach ... #endfor / #endforeach with expanded query items.
     mimics mybatis <foreach> tag with parameter binding and template substitution.
@@ -265,18 +276,27 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
     if "#foreach" not in qry_str:
         return qry_str
 
-    pattern_tag = re.compile(
-        r"#foreach\b((?:(?!#(?:endfor|endforeach)\b)[^\r\n])*)"
-    )
+    for line in qry_str.splitlines():
+        line_strip = line.strip()
+        if line_strip.startswith(("#foreach", "#endfor", "#endforeach")):
+            if line_strip.endswith("\\"):
+                raise ValueError(
+                    f"Multi-line directive is not allowed: '{line_strip}'"
+                )
+
+    pattern_tag = re.compile(r"#foreach\b((?:(?!#(?:endfor|endforeach)\b)[^\r\n])*)")
     pattern_token = re.compile(r"#foreach\b[^\r\n]*|#(?:endfor|endforeach)\b")
-    loop_counter = [0]
+    loop_counter = _loop_counter if _loop_counter is not None else [0]
 
     def render_item_block(tag_str: str, body: str, loop_id: int) -> str:
+        if "\n" in tag_str or "\r" in tag_str:
+            raise ValueError(
+                f"#foreach directive must be on a single line: '{tag_str}'"
+            )
         content = tag_str[len("#foreach") :].strip()
         py_match = re.match(
             r"^(?:([a-zA-Z0-9_]+)\s*,\s*)?([a-zA-Z0-9_]+)\s+in\s+(?:\$\{([a-zA-Z0-9_.]+)\}|([a-zA-Z0-9_.]+))(.*)$",
             content,
-            re.DOTALL,
         )
         if not py_match:
             raise ValueError(
@@ -291,11 +311,12 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
         rest = py_match.group(5)
 
         attr_matches = re.findall(
-            r'([a-zA-Z0-9_]+)\s*=\s*(["\'])(.*?)\2', rest, re.DOTALL
+            r'([a-zA-Z0-9_]+)\s*=\s*(["\'])(.*?)\2', rest
         )
         attrs = {m[0]: m[2] for m in attr_matches}
 
         open_str = attrs.get("open", "")
+        has_custom_separator = "separator" in attrs
         separator = attrs.get("separator", "")
         close_str = attrs.get("close", "")
 
@@ -317,9 +338,7 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
             raise KeyError(f"'{collection_key}' not in params")
 
         if coll is None:
-            raise ValueError(
-                f"'{collection_key}' value in params cannot be None"
-            )
+            raise ValueError(f"'{collection_key}' value in params cannot be None")
         if not coll:
             return ""
 
@@ -347,9 +366,9 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
         body_template = "\n".join(body_lines)
 
         is_comma_sep = separator.strip() == ","
-        is_clause_wrapped = (
-            open_str.endswith("(") or open_str.endswith("[")
-        ) and (close_str.startswith(")") or close_str.startswith("]"))
+        is_clause_wrapped = (open_str.endswith("(") or open_str.endswith("[")) and (
+            close_str.startswith(")") or close_str.startswith("]")
+        )
 
         rendered_items = []
 
@@ -359,11 +378,24 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
             else:
                 item_text = body_template
 
-            # Evaluate conditional #if inside #foreach body if present
             iter_params = params.copy()
             if index_var:
                 iter_params[index_var] = idx_val
             iter_params[item_var] = val
+
+            # Nested #foreach
+            if "#foreach" in item_text:
+                item_text = get_foreach(
+                    item_text,
+                    iter_params,
+                    dialect=dialect,
+                    _loop_counter=loop_counter,
+                )
+                for k, v in iter_params.items():
+                    if k.startswith("__f_"):
+                        params[k] = v
+
+            # Evaluate conditional #if inside #foreach body if present
             if "#if" in item_text:
                 item_text = get_conditional(item_text, iter_params)
                 if not item_text.strip():
@@ -391,23 +423,15 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
                 )
                 p_name = f"__f_{index_var}_{loop_id}_{idx}"
                 params[p_name] = idx_val
-                target = (
-                    f":{p_name}" if dialect == "sqlite" else f"%({p_name})s"
-                )
+                target = f":{p_name}" if dialect == "sqlite" else f"%({p_name})s"
                 item_text = re.sub(
                     rf"#\{{\s*{re.escape(index_var)}\s*\}}", target, item_text
                 )
-                item_text = re.sub(
-                    rf":{re.escape(index_var)}\b", target, item_text
-                )
-                item_text = re.sub(
-                    rf"%\({re.escape(index_var)}\)s", target, item_text
-                )
+                item_text = re.sub(rf":{re.escape(index_var)}\b", target, item_text)
+                item_text = re.sub(rf"%\({re.escape(index_var)}\)s", target, item_text)
 
             # 2. Template literal ${item} or ${item.prop}
-            pat_tpl = (
-                rf"\$\{{\s*{re.escape(item_var)}(?:\.([a-zA-Z0-9_.]+))?\s*\}}"
-            )
+            pat_tpl = rf"\$\{{\s*{re.escape(item_var)}(?:\.([a-zA-Z0-9_.]+))?\s*\}}"
             item_text = re.sub(
                 pat_tpl,
                 lambda m, cur_val=val: str(get_prop(m.group(1), cur_val)),
@@ -415,9 +439,7 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
             )
 
             # 3. Bound parameter placeholders: #{item}, #{item.prop}, :item, %(item)s
-            def repl(
-                m: re.Match, cur_idx=idx, cur_val=val
-            ) -> str:
+            def repl(m: re.Match, cur_idx=idx, cur_val=val) -> str:
                 prop = m.group(1)
                 prop_suffix = f"_{prop.replace('.', '_')}" if prop else ""
                 p_name = f"__f_{item_var}{prop_suffix}_{loop_id}_{cur_idx}"
@@ -449,14 +471,18 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
 
         if is_single_line and (is_clause_wrapped or not is_comma_sep):
             sep = separator if separator else ", "
-            return f"{open_str}{sep.join(rendered_items)}{close_str}"
-        else:
+        elif has_custom_separator:
             sep = (
                 f"{separator}\n"
                 if is_comma_sep and not separator.endswith("\n")
-                else (separator or "\n")
+                else separator
             )
-            return f"{open_str}{sep.join(rendered_items)}{close_str}"
+        elif is_clause_wrapped:
+            sep = ", "
+        else:
+            sep = "\n"
+
+        return f"{open_str}{sep.join(rendered_items)}{close_str}"
 
     def process_blocks(text: str) -> str:
         res = []
@@ -466,7 +492,13 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
             if not m:
                 res.append(text[idx:])
                 break
-            res.append(text[idx : m.start()])
+            line_start = text.rfind("\n", idx, m.start())
+            prefix_start = line_start + 1 if line_start != -1 else idx
+            prefix = text[prefix_start : m.start()]
+            if prefix.strip() == "":
+                res.append(text[idx:prefix_start])
+            else:
+                res.append(text[idx : m.start()])
             tag = m.group(0)
             pos = m.end()
             depth = 1
@@ -477,8 +509,6 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
                     depth -= 1
                     if depth == 0:
                         body = text[pos : tok.start()]
-                        if "#foreach" in body:
-                            body = process_blocks(body)
                         rendered = render_item_block(tag, body, loop_counter[0])
                         loop_counter[0] += 1
                         res.append(rendered)
@@ -489,19 +519,6 @@ def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
         return "".join(res)
 
     return process_blocks(qry_str)
-
-
-def rep_kv(query: str, tab_count: int, **kwargs) -> str:
-    """
-    replace {key} with value when `rev_ky("WHERE user_name = {key}", key="u.user_name")`
-    """
-
-    ret = query
-    ret = re.sub(r"^", " " * 4 * tab_count, ret, flags=re.MULTILINE)
-    for k, v in kwargs.items():
-        ret = ret.replace("{" + k + "}", str(v))
-
-    return ret
 
 
 def get_query_with_value(qry_str: str, params: dict) -> str:

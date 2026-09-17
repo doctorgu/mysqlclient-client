@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.4]
+
+- Support nested #foreach
+
 ## [1.2.3]
 
 - Support #foreach dynamic loop directive

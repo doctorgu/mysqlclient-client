@@ -170,9 +170,7 @@ def test_foreach_none_value_raises_value_error():
         #{item}
     #endfor
     """
-    with pytest.raises(
-        ValueError, match="'user_ids' value in params cannot be None"
-    ):
+    with pytest.raises(ValueError, match="'user_ids' value in params cannot be None"):
         get_foreach(sql, {"user_ids": None}, dialect="mysql")
 
 
@@ -274,3 +272,41 @@ def test_foreach_with_query_class():
     assert "(%(__f_id_0_0)s,%(__f_id_0_1)s)" in res
     assert params["__f_id_0_0"] == "gildong.hong"
     assert params["__f_id_0_1"] == "sunja.kim"
+
+
+def test_foreach_nested():
+    """test nested #foreach directives"""
+    sql = """
+    SELECT * FROM matrix WHERE (r, c) IN
+    #foreach row in ${matrix} open="(" separator="," close=")"
+        #foreach col in ${row} open="(" separator="," close=")"
+            #{col}
+        #endfor
+    #endfor
+    """
+    params = {"matrix": [[1, 2], [3, 4]]}
+    res = get_foreach(sql, params, dialect="mysql")
+    expected = (
+        "((%(__f_col_0_0)s,%(__f_col_0_1)s),\n"
+        "(%(__f_col_1_0)s,%(__f_col_1_1)s))"
+    )
+    assert expected in res
+    assert params["__f_col_0_0"] == 1
+    assert params["__f_col_0_1"] == 2
+    assert params["__f_col_1_0"] == 3
+    assert params["__f_col_1_1"] == 4
+
+
+def test_directive_multi_line_disallowed():
+    """test that multi-line directives raise ValueError"""
+    sql_foreach = """
+    SELECT * FROM t_user
+    WHERE id IN
+    #foreach item in ${items} \\
+        open="(" close=")"
+        #{item}
+    #endfor
+    """
+    with pytest.raises(ValueError, match="Multi-line directive is not allowed"):
+        get_foreach(sql_foreach, {"items": [1, 2]}, dialect="mysql")
+
