@@ -1,4 +1,4 @@
-"""client_util"""
+"""query_by_key_util"""
 
 import re
 from datetime import datetime
@@ -102,16 +102,12 @@ def get_conditional(qry_str: str, params: dict) -> str:
 
     rets = []
     lines = qry_str.splitlines()
+
     is_include = True
     is_checked = False
     foreach_depth = 0
     for line in lines:
         line_strip = line.strip()
-        if line_strip.startswith("#"):
-            if line_strip.endswith("\\"):
-                raise ValueError(
-                    f"Multi-line directive is not allowed: '{line_strip}'"
-                )
         if line_strip.startswith("#foreach"):
             foreach_depth += 1
             if is_include:
@@ -170,10 +166,6 @@ def get_include(qry_str: str, all_query: dict, max_depth: int = 10) -> str:
             if "#include" in line:
                 if not line_strip.startswith("#include"):
                     raise ValueError(f"inline #include is not allowed: '{line}'")
-                if line_strip.endswith("\\"):
-                    raise ValueError(
-                        f"Multi-line directive is not allowed: '{line_strip}'"
-                    )
 
                 has_include = True
                 m = pattern.match(line_strip)
@@ -276,14 +268,6 @@ def get_foreach(
     if "#foreach" not in qry_str:
         return qry_str
 
-    for line in qry_str.splitlines():
-        line_strip = line.strip()
-        if line_strip.startswith(("#foreach", "#endfor", "#endforeach")):
-            if line_strip.endswith("\\"):
-                raise ValueError(
-                    f"Multi-line directive is not allowed: '{line_strip}'"
-                )
-
     pattern_tag = re.compile(r"#foreach\b((?:(?!#(?:endfor|endforeach)\b)[^\r\n])*)")
     pattern_token = re.compile(r"#foreach\b[^\r\n]*|#(?:endfor|endforeach)\b")
     loop_counter = _loop_counter if _loop_counter is not None else [0]
@@ -316,7 +300,6 @@ def get_foreach(
         attrs = {m[0]: m[2] for m in attr_matches}
 
         open_str = attrs.get("open", "")
-        has_custom_separator = "separator" in attrs
         separator = attrs.get("separator", "")
         close_str = attrs.get("close", "")
 
@@ -470,17 +453,13 @@ def get_foreach(
             return ""
 
         if is_single_line and (is_clause_wrapped or not is_comma_sep):
-            sep = separator if separator else ", "
-        elif has_custom_separator:
+            sep = separator
+        else:
             sep = (
                 f"{separator}\n"
                 if is_comma_sep and not separator.endswith("\n")
                 else separator
             )
-        elif is_clause_wrapped:
-            sep = ", "
-        else:
-            sep = "\n"
 
         return f"{open_str}{sep.join(rendered_items)}{close_str}"
 

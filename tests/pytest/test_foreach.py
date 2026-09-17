@@ -198,6 +198,20 @@ def test_foreach_unclosed_raises_value_error():
         get_foreach(sql, {"user_ids": [1]}, dialect="mysql")
 
 
+def test_foreach_missing_separator_defaults_to_empty():
+    """test that missing separator attribute defaults to empty string"""
+    sql = """
+    SELECT * FROM t_user
+    WHERE user_id IN
+    #foreach item in ${user_ids} open="(" close=")"
+        #{item}
+    #endfor
+    """
+    result = get_foreach(sql, {"user_ids": ["a", "b"]}, dialect="mysql")
+    assert "__f_item_0_0" in result
+    assert "," not in result.split("(")[1].split(")")[0]
+
+
 def test_foreach_nested_inside_if():
     """test #if wrapping #foreach directive"""
     sql = """
@@ -295,18 +309,4 @@ def test_foreach_nested():
     assert params["__f_col_0_1"] == 2
     assert params["__f_col_1_0"] == 3
     assert params["__f_col_1_1"] == 4
-
-
-def test_directive_multi_line_disallowed():
-    """test that multi-line directives raise ValueError"""
-    sql_foreach = """
-    SELECT * FROM t_user
-    WHERE id IN
-    #foreach item in ${items} \\
-        open="(" close=")"
-        #{item}
-    #endfor
-    """
-    with pytest.raises(ValueError, match="Multi-line directive is not allowed"):
-        get_foreach(sql_foreach, {"items": [1, 2]}, dialect="mysql")
 

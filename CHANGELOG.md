@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.5]
+
+- Minimize differences across all *-client source code
+
 ## [1.2.4]
 
 - Support nested #foreach
