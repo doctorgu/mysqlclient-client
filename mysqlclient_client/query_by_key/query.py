@@ -6,6 +6,7 @@ from typing import Literal
 
 from .query_util import (
     get_conditional,
+    get_foreach,
     get_include,
     get_template,
     replace_en_ko_column_alias,
@@ -65,6 +66,8 @@ class Query:
             query = replace_en_ko_column_alias(query, en)
         if self.qry_settings.use_conditional and "#if" in query:
             query = get_conditional(query, cond_params)
+        if "#foreach" in query:
+            query = get_foreach(query, cond_params, dialect="mysql")
         if "${" in query:
             query = get_template(query, cond_params)
 

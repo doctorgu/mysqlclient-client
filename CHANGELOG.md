@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.3]
+
+- Support #foreach dynamic loop directive
+
 ## [1.2.2]
 
 - Support ${param} template variable and enforce ${param} in #if conditions

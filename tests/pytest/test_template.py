@@ -122,6 +122,24 @@ def test_if_raw_variable_raises_error():
             "WHERE country = 'KR'\n"
             "#endif"
         ),
+        "read_raw_rev": (
+            "SELECT id FROM t_user\n"
+            "#if 'korea' == target\n"
+            "WHERE country = 'KR'\n"
+            "#endif"
+        ),
+        "read_raw_val": (
+            "SELECT id FROM t_user\n"
+            "#if ${target} == korea\n"
+            "WHERE country = 'KR'\n"
+            "#endif"
+        ),
+        "read_fn_call": (
+            "SELECT id FROM t_user\n"
+            "#if len(${targets}) > 0\n"
+            "WHERE country = 'KR'\n"
+            "#endif"
+        ),
     }
     query = Query(
         qry_settings=Settings(
@@ -135,6 +153,15 @@ def test_if_raw_variable_raises_error():
 
     with pytest.raises(ValueError, match="Raw variable"):
         query.get_query_by_key("read_raw_comp", {"target": "korea"}, "read")
+
+    with pytest.raises(ValueError, match="Raw variable"):
+        query.get_query_by_key("read_raw_rev", {"target": "korea"}, "read")
+
+    with pytest.raises(ValueError, match="Raw variable"):
+        query.get_query_by_key("read_raw_val", {"target": "korea"}, "read")
+
+    with pytest.raises(ValueError, match="Raw variable"):
+        query.get_query_by_key("read_fn_call", {"targets": ["A"]}, "read")
 
 
 def test_if_template_variable():

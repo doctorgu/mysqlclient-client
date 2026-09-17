@@ -7,7 +7,19 @@ from datetime import datetime
 def get_conditional(qry_str: str, params: dict) -> str:
     """
     return true or false part by condition.
-    `#if target == 'korea' ... #elif target == 'vietnam' ... #else ... #endif`
+
+    ex:
+    SELECT  *
+    FROM
+    #if ${target} == 'en'
+            tbl_en
+    #else
+            tbl_ko
+    #endif
+    ->
+    SELECT  *
+    FROM
+            tbl_en
     """
 
     def eval_safe(condition: str, params: dict) -> bool:
@@ -88,12 +100,30 @@ def get_conditional(qry_str: str, params: dict) -> str:
         to_eval = re.sub(pattern_param, replace_var, condition)
         return bool(eval(to_eval, {"__builtins__": {}}, eval_dict))
 
-    lines = qry_str.split("\n")
     rets = []
+    lines = qry_str.splitlines()
     is_include = True
     is_checked = False
+    foreach_depth = 0
     for line in lines:
         line_strip = line.strip()
+        if line_strip.startswith("#foreach"):
+            foreach_depth += 1
+            if is_include:
+                rets.append(line)
+            continue
+        elif line_strip.startswith(("#endfor", "#endforeach")):
+            if foreach_depth > 0:
+                foreach_depth -= 1
+            if is_include:
+                rets.append(line)
+            continue
+
+        if foreach_depth > 0:
+            if is_include:
+                rets.append(line)
+            continue
+
         if line_strip.startswith(("#if", "#elif")):
             if not is_checked:
                 _, condition = line_strip.split(maxsplit=1)
@@ -219,6 +249,246 @@ def get_template(qry_str: str, params: dict) -> str:
 
     replaced = re.sub(r"(?<!\\)\$\{\s*([a-zA-Z0-9_.]+)\s*\}", replacer, qry_str)
     return replaced.replace(r"\${", "${")
+
+
+def get_foreach(qry_str: str, params: dict, dialect: str = "mysql") -> str:
+    """
+    replace #foreach ... #endfor / #endforeach with expanded query items.
+    mimics mybatis <foreach> tag with parameter binding and template substitution.
+
+    supports:
+    - Pythonic: #foreach item in ${ids} [open="("] [separator=","] [close=")"]
+    - With index: #foreach idx, item in ${ids} [open="("] [separator=","]
+    - Bound placeholders: #{item}, #{item.prop}, :item, %(item)s, #{index}
+    - Template substitutions: ${item}, ${item.prop}, ${index}
+    """
+    if "#foreach" not in qry_str:
+        return qry_str
+
+    pattern_tag = re.compile(
+        r"#foreach\b((?:(?!#(?:endfor|endforeach)\b)[^\r\n])*)"
+    )
+    pattern_token = re.compile(r"#foreach\b[^\r\n]*|#(?:endfor|endforeach)\b")
+    loop_counter = [0]
+
+    def render_item_block(tag_str: str, body: str, loop_id: int) -> str:
+        content = tag_str[len("#foreach") :].strip()
+        py_match = re.match(
+            r"^(?:([a-zA-Z0-9_]+)\s*,\s*)?([a-zA-Z0-9_]+)\s+in\s+(?:\$\{([a-zA-Z0-9_.]+)\}|([a-zA-Z0-9_.]+))(.*)$",
+            content,
+            re.DOTALL,
+        )
+        if not py_match:
+            raise ValueError(
+                f"Invalid #foreach syntax: '{tag_str}'. "
+                "Expected '#foreach item in ${collection}' or "
+                "'#foreach idx, item in ${collection}'"
+            )
+
+        index_var = py_match.group(1)
+        item_var = py_match.group(2)
+        collection_key = py_match.group(3) or py_match.group(4)
+        rest = py_match.group(5)
+
+        attr_matches = re.findall(
+            r'([a-zA-Z0-9_]+)\s*=\s*(["\'])(.*?)\2', rest, re.DOTALL
+        )
+        attrs = {m[0]: m[2] for m in attr_matches}
+
+        open_str = attrs.get("open", "")
+        separator = attrs.get("separator", "")
+        close_str = attrs.get("close", "")
+
+        # Resolve collection
+        if collection_key in params:
+            coll = params[collection_key]
+        elif "." in collection_key:
+            parts = collection_key.split(".")
+            curr = params
+            for p in parts:
+                if isinstance(curr, dict) and p in curr:
+                    curr = curr[p]
+                elif hasattr(curr, p):
+                    curr = getattr(curr, p)
+                else:
+                    raise KeyError(f"'{collection_key}' not in params")
+            coll = curr
+        else:
+            raise KeyError(f"'{collection_key}' not in params")
+
+        if coll is None:
+            raise ValueError(
+                f"'{collection_key}' value in params cannot be None"
+            )
+        if not coll:
+            return ""
+
+        if isinstance(coll, dict):
+            items_list = list(coll.items())
+        elif isinstance(coll, (list, tuple, set)):
+            items_list = list(enumerate(coll))
+        else:
+            raise TypeError(
+                f"'{collection_key}' must be a list, tuple, set, or dict, "
+                f"got {type(coll).__name__}"
+            )
+
+        # Extract meaningful body lines (trim leading/trailing blank lines)
+        all_lines = body.splitlines()
+        first = 0
+        while first < len(all_lines) and not all_lines[first].strip():
+            first += 1
+        last = len(all_lines) - 1
+        while last >= 0 and not all_lines[last].strip():
+            last -= 1
+
+        body_lines = all_lines[first : last + 1] if first <= last else []
+        is_single_line = len(body_lines) <= 1
+        body_template = "\n".join(body_lines)
+
+        is_comma_sep = separator.strip() == ","
+        is_clause_wrapped = (
+            open_str.endswith("(") or open_str.endswith("[")
+        ) and (close_str.startswith(")") or close_str.startswith("]"))
+
+        rendered_items = []
+
+        for idx, (idx_val, val) in enumerate(items_list):
+            if is_single_line and (is_clause_wrapped or not is_comma_sep):
+                item_text = body_template.strip()
+            else:
+                item_text = body_template
+
+            # Evaluate conditional #if inside #foreach body if present
+            iter_params = params.copy()
+            if index_var:
+                iter_params[index_var] = idx_val
+            iter_params[item_var] = val
+            if "#if" in item_text:
+                item_text = get_conditional(item_text, iter_params)
+                if not item_text.strip():
+                    continue
+
+            def get_prop(prop: str | None, v):
+                if not prop:
+                    return v
+                curr = v
+                for p in prop.split("."):
+                    if isinstance(curr, dict) and p in curr:
+                        curr = curr[p]
+                    elif hasattr(curr, p):
+                        curr = getattr(curr, p)
+                    else:
+                        raise KeyError(f"Property '{p}' not found in {curr}")
+                return curr
+
+            # 1. Template literal ${index} and bound placeholders for index
+            if index_var:
+                item_text = re.sub(
+                    rf"\$\{{\s*{re.escape(index_var)}\s*\}}",
+                    str(idx_val),
+                    item_text,
+                )
+                p_name = f"__f_{index_var}_{loop_id}_{idx}"
+                params[p_name] = idx_val
+                target = (
+                    f":{p_name}" if dialect == "sqlite" else f"%({p_name})s"
+                )
+                item_text = re.sub(
+                    rf"#\{{\s*{re.escape(index_var)}\s*\}}", target, item_text
+                )
+                item_text = re.sub(
+                    rf":{re.escape(index_var)}\b", target, item_text
+                )
+                item_text = re.sub(
+                    rf"%\({re.escape(index_var)}\)s", target, item_text
+                )
+
+            # 2. Template literal ${item} or ${item.prop}
+            pat_tpl = (
+                rf"\$\{{\s*{re.escape(item_var)}(?:\.([a-zA-Z0-9_.]+))?\s*\}}"
+            )
+            item_text = re.sub(
+                pat_tpl,
+                lambda m, cur_val=val: str(get_prop(m.group(1), cur_val)),
+                item_text,
+            )
+
+            # 3. Bound parameter placeholders: #{item}, #{item.prop}, :item, %(item)s
+            def repl(
+                m: re.Match, cur_idx=idx, cur_val=val
+            ) -> str:
+                prop = m.group(1)
+                prop_suffix = f"_{prop.replace('.', '_')}" if prop else ""
+                p_name = f"__f_{item_var}{prop_suffix}_{loop_id}_{cur_idx}"
+                params[p_name] = get_prop(prop, cur_val)
+                return f":{p_name}" if dialect == "sqlite" else f"%({p_name})s"
+
+            item_text = re.sub(
+                rf"#\{{\s*{re.escape(item_var)}(?:\.([a-zA-Z0-9_.]+))?\s*\}}",
+                repl,
+                item_text,
+            )
+            if dialect == "sqlite":
+                item_text = re.sub(
+                    rf":{re.escape(item_var)}(?:\.([a-zA-Z0-9_.]+))?\b",
+                    repl,
+                    item_text,
+                )
+            else:
+                item_text = re.sub(
+                    rf"%\({re.escape(item_var)}(?:\.([a-zA-Z0-9_.]+))?\)s",
+                    repl,
+                    item_text,
+                )
+
+            rendered_items.append(item_text)
+
+        if not rendered_items:
+            return ""
+
+        if is_single_line and (is_clause_wrapped or not is_comma_sep):
+            sep = separator if separator else ", "
+            return f"{open_str}{sep.join(rendered_items)}{close_str}"
+        else:
+            sep = (
+                f"{separator}\n"
+                if is_comma_sep and not separator.endswith("\n")
+                else (separator or "\n")
+            )
+            return f"{open_str}{sep.join(rendered_items)}{close_str}"
+
+    def process_blocks(text: str) -> str:
+        res = []
+        idx = 0
+        while True:
+            m = pattern_tag.search(text, idx)
+            if not m:
+                res.append(text[idx:])
+                break
+            res.append(text[idx : m.start()])
+            tag = m.group(0)
+            pos = m.end()
+            depth = 1
+            for tok in pattern_token.finditer(text, pos):
+                if tok.group(0).startswith("#foreach"):
+                    depth += 1
+                else:
+                    depth -= 1
+                    if depth == 0:
+                        body = text[pos : tok.start()]
+                        if "#foreach" in body:
+                            body = process_blocks(body)
+                        rendered = render_item_block(tag, body, loop_counter[0])
+                        loop_counter[0] += 1
+                        res.append(rendered)
+                        idx = tok.end()
+                        break
+            else:
+                raise ValueError(f"Unclosed #foreach starting at: '{tag}'")
+        return "".join(res)
+
+    return process_blocks(qry_str)
 
 
 def rep_kv(query: str, tab_count: int, **kwargs) -> str:

@@ -5,6 +5,9 @@ A lightweight, opinionated wrapper around **mysqlclient** (`MySQLdb`) with built
 - Connection pooling (`minconn` / `maxconn`)
 - Query dictionary management
 - Conditional SQL (`#if` / `#elif` / `#endif`)
+- Dynamic Loop (`#foreach` / `#endfor` / `#endforeach`)
+- Include Query Snippet (`#include`)
+- Template Variable (`${param}`)
 - Bilingual column aliases (`en|ko`)
 - Simple transaction handling via context manager
 - Safe parameter binding (`%(param)s` syntax)
@@ -268,6 +271,91 @@ db.update("delete_data_by_version", {"table": "data_menu", "version": "1.0.0"})
 
 If a referenced `${param}` does not exist in `params`, a `KeyError` is raised. If its value is `None`, a `ValueError` is raised.
 
+## Dynamic Loop (`#foreach`)
+
+Support dynamic collection iteration mimicking MyBatis `<foreach>`. It safely binds dynamic parameter keys in `params` (e.g. `%(__f_item_0_0)s`) preventing SQL injection, and seamlessly replaces them with values during logging.
+
+### Supported Syntax
+
+- **Item iteration**: `#foreach item in ${user_ids} open="(" separator="," close=")"`
+- **With index**: `#foreach idx, item in ${items} separator=","`
+- **Closing tag**: `#endfor` or `#endforeach`
+
+### Inside `#foreach` Body
+
+- `#{item}` or `%(item)s`: Parameterized bind variable (mapped to `%(__f_...)s` in MySQL).
+- `#{item.prop}` or `%(item.prop)s`: Property access for lists of dictionaries/objects.
+- `${item}`, `${item.prop}`, `${index}`: Direct template string substitution.
+
+### Example 1: IN Clause
+
+```yaml
+- name: read_users_in
+  value: |
+    SELECT  user_id, user_name
+    FROM    t_user
+    WHERE   user_id IN
+    #foreach item in ${user_ids} open="(" separator=", " close=")"
+        #{item}
+    #endfor
+```
+
+```python
+rows = db.read_rows("read_users_in", {"user_ids": ["gildong.hong", "sunja.kim"]})
+```
+
+Generated query sent to MySQL:
+```sql
+SELECT  user_id, user_name
+FROM    t_user
+WHERE   user_id IN
+('gildong.hong', 'sunja.kim')
+```
+
+### Example 2: Multi-row INSERT (Batch Insert)
+
+> [!NOTE]
+> Native `executemany` with list or tuple of parameter is faster.
+
+```yaml
+- name: insert_users
+  value: |
+    INSERT INTO t_user (user_id, user_name, user_rank) VALUES
+    #foreach user in ${users} separator=","
+        (#{user.id}, #{user.name}, #{user.rank})
+    #endfor;
+```
+
+```python
+db.update(
+    "insert_users",
+    {
+        "users": [
+            {"id": "user1", "name": "Alice", "rank": 1},
+            {"id": "user2", "name": "Bob", "rank": 2},
+        ]
+    },
+)
+```
+
+### Example 3: Combined with `#if`
+
+```yaml
+- name: read_users_filtered
+  value: |
+    SELECT  user_id, user_name
+    FROM    t_user
+    WHERE   1 = 1
+    #if ${user_ids}
+        AND user_id IN
+        #foreach id in ${user_ids} open="(" separator="," close=")"
+            #{id}
+        #endfor
+    #endif
+```
+
+If `user_ids` is not provided or empty, the entire block is omitted without raising errors. If the collection is empty (`[]`), `#foreach` produces an empty string without stray parentheses.
+
 ## Safety & Security
 
 The `#if` preprocessor only allows `${param}` variables, string literals, numbers, and basic boolean operators. Raw variable names without `${...}` or any attempt to inject raw SQL will raise a parsing error before execution.
@@ -285,6 +373,7 @@ The `#if` preprocessor only allows `${param}` variables, string literals, number
 | Partially return CSV          | `read_csv_partial` / `read_csv_partial_async`                                   |
 | Bilingual column aliases      | `"Name\|이름"` syntax                                                           |
 | Conditional SQL               | `#if` / `#elif` / `#endif`                                                      |
+| Dynamic Loop                  | `#foreach` / `#endfor` / `#endforeach`                                          |
 | Include Query Snippet         | `#include` / `#include(key)`                                                    |
 | Template Variable             | `${param}` MyBatis-style text substitution (e.g. dynamic table names)           |
 | Logging support               | Before and after execute hooks via `before...` and `after...` callables         |
