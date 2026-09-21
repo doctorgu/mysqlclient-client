@@ -543,7 +543,7 @@ class Client:
     def update(
         self,
         qry_key: str,
-        params: dict,
+        params: dict | list[dict],
         params_out: dict | None = None,
     ) -> int:
         """call updates"""
@@ -554,7 +554,10 @@ class Client:
 
     def updates(
         self,
-        qry_key_params_list: list[tuple[str, dict, dict]] | list[tuple[str, dict]],
+        qry_key_params_list: (
+            list[tuple[str, dict | list[dict], dict]]
+            | list[tuple[str, dict | list[dict]]]
+        ),
     ) -> list[int]:
         """Executes a list of SQL statements within a single transaction.
         If all SQL commands succeed, returns a list of the number of rows affected
@@ -571,9 +574,12 @@ class Client:
         """
 
         def normalize_qry_key_params_list(
-            qry_key_params_list: list[tuple[str, dict, dict]] | list[tuple[str, dict]],
-        ) -> list[tuple[str, dict, dict]]:
-            qry_key_params_list_new: list[tuple[str, dict, dict]] = []
+            qry_key_params_list: (
+                list[tuple[str, dict | list[dict], dict]]
+                | list[tuple[str, dict | list[dict]]]
+            ),
+        ) -> list[tuple[str, dict | list[dict], dict]]:
+            qry_key_params_list_new: list[tuple[str, dict | list[dict], dict]] = []
             for item in qry_key_params_list:
                 if len(item) == 2:
                     qry_key, params = item
@@ -589,7 +595,10 @@ class Client:
             return qry_key_params_list_new
 
         def updates_by_param(
-            qry_key_params_list: list[tuple[str, dict, dict]] | list[tuple[str, dict]],
+            qry_key_params_list: (
+                list[tuple[str, dict | list[dict], dict]]
+                | list[tuple[str, dict | list[dict]]]
+            ),
             cursor: MySQLdb.cursors.DictCursor,
         ) -> list[int]:
             row_counts: list[int] = []

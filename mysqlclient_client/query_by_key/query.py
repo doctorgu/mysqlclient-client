@@ -23,7 +23,7 @@ class Query:
     def get_query_by_key(
         self,
         qry_key: str,
-        params: dict,
+        params: dict | list[dict],
         func_type: Literal["update", "read", "csv"],
         en: bool = False,
     ) -> str:

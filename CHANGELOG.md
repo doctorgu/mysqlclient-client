@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.6]
+
+- Add list[dict] type to params in updates for executemany support
+
 ## [1.2.5]
 
 - Minimize differences across all *-client source code

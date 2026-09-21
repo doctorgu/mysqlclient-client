@@ -500,7 +500,7 @@ def get_foreach(
     return process_blocks(qry_str)
 
 
-def get_query_with_value(qry_str: str, params: dict) -> str:
+def get_query_with_value(qry_str: str, params: dict | list[dict]) -> str:
     """replace raw query to value filled query"""
 
     def escape_literal(value) -> str:
