@@ -191,10 +191,10 @@ class Client:
 
         all_query: dict[str, str | dict[str, str]] = {}
         if path and path.is_dir():
-            for yml_path in sorted(
-                p for p in path.iterdir() if p.suffix in (".yml", ".yaml")
+            for yaml_path in sorted(
+                p for p in path.iterdir() if p.suffix in (".yaml", ".yml")
             ):
-                with open(yml_path, encoding="utf-8") as f:
+                with open(yaml_path, encoding="utf-8") as f:
                     items = yaml.safe_load(f) or []
 
                 qry_cur: dict[str, str | dict[str, str]] = {}

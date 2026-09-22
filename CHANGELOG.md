@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.8]
+
+- Rename *.yml to *.yaml
+
 ## [1.2.7]
 
 - Remove use_conditional and make it always to use

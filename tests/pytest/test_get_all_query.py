@@ -36,8 +36,8 @@ def test_get_all_query_not_found(tmp_path):
 def test_get_all_query_duplicate_key(tmp_path):
     """test get_all_query raises ValueError on duplicate query keys across files"""
     client = Client(db_settings)
-    q1 = tmp_path / "q1.yml"
-    q2 = tmp_path / "q2.yml"
+    q1 = tmp_path / "q1.yaml"
+    q2 = tmp_path / "q2.yaml"
     q1.write_text("- name: dup_key\n  value: SELECT 1\n", encoding="utf-8")
     q2.write_text("- name: dup_key\n  value: SELECT 2\n", encoding="utf-8")
     with pytest.raises(ValueError, match="duplicated keys"):
