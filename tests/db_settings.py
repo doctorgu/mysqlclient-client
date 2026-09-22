@@ -19,7 +19,6 @@ db_settings = Settings(
     maxconn=6,
     connect_timeout=3,
     use_en_ko_column_alias=True,
-    use_conditional=True,
     dir_queries=Path(__file__).parent / "queries",
     before_read_execute=lambda qry_key, params, qry_str, qry_with_value: print(
         f'READ_ROWS_START, QRY_KEY: "{qry_key}", QRY_WITH_VALUE: {qry_with_value}'

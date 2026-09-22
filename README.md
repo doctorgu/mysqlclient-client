@@ -66,7 +66,6 @@ db_settings = Settings(
     maxconn=10,
     connect_timeout=5,
     use_en_ko_column_alias=True,
-    use_conditional=True,
     all_query=qry_dic,
     before_read_execute=lambda qry_key, params, qry_str, qry_with_value: print(
         f'READ_ROWS_START, QRY_KEY: "{qry_key}", QRY_WITH_VALUE: {qry_with_value}'
@@ -206,7 +205,7 @@ print(rows[0])
 
 ## Conditional SQL (`#if`, `#elif`, `#endif`)
 
-Enabled when `use_conditional=True`:
+Conditional blocks (`#if`, `#elif`, `#else`, `#endif`) are processed dynamically:
 
 ```yaml
 - name: read_user_search

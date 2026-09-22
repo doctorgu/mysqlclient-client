@@ -154,7 +154,6 @@ class Client:
         self.qry = Query(
             qry_settings=QrySettings(
                 use_en_ko_column_alias=db_settings.use_en_ko_column_alias,
-                use_conditional=db_settings.use_conditional,
                 all_query=self.all_query,
             )
         )

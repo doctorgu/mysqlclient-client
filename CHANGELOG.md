@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.7]
+
+- Remove use_conditional and make it always to use
+
 ## [1.2.6]
 
 - Add list[dict] type to params in updates for executemany support

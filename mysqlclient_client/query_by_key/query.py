@@ -64,7 +64,7 @@ class Query:
             query = get_include(query, self.qry_settings.all_query)
         if self.qry_settings.use_en_ko_column_alias and isinstance(en, bool):
             query = replace_en_ko_column_alias(query, en)
-        if self.qry_settings.use_conditional and "#if" in query:
+        if "#if" in query:
             query = get_conditional(query, cond_params)
         if "#foreach" in query:
             query = get_foreach(query, cond_params, dialect="mysql")

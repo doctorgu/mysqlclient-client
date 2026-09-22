@@ -277,7 +277,6 @@ def test_foreach_with_query_class():
     query = Query(
         qry_settings=QrySettings(
             use_en_ko_column_alias=False,
-            use_conditional=True,
             all_query=all_query,
         )
     )

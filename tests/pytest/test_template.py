@@ -59,7 +59,6 @@ def test_template_with_query_class():
     query = Query(
         qry_settings=Settings(
             use_en_ko_column_alias=False,
-            use_conditional=True,
             all_query=all_query,
         )
     )
@@ -81,7 +80,6 @@ def test_template_combined_with_if():
     query = Query(
         qry_settings=Settings(
             use_en_ko_column_alias=False,
-            use_conditional=True,
             all_query=all_query,
         )
     )
@@ -130,7 +128,6 @@ def test_if_raw_variable_raises_error():
     query = Query(
         qry_settings=Settings(
             use_en_ko_column_alias=False,
-            use_conditional=True,
             all_query=all_query,
         )
     )
@@ -165,7 +162,6 @@ def test_if_template_variable():
     query = Query(
         qry_settings=Settings(
             use_en_ko_column_alias=False,
-            use_conditional=True,
             all_query=all_query,
         )
     )
@@ -193,7 +189,6 @@ def test_template_combined_with_include():
     query = Query(
         qry_settings=Settings(
             use_en_ko_column_alias=False,
-            use_conditional=True,
             all_query=all_query,
         )
     )
